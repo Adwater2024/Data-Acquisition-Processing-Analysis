@@ -25,7 +25,7 @@ def SNOTELPlots(sitedict, gdf_in_bbox, WY, watershed, AOI, DOI,plot = True):
     for i, key in enumerate(sitedict.keys()):
         df = sitedict[key]
 
-        axs[i].set_title(f"SNOTEL Site: {gdf_in_bbox['name'][gdf_in_bbox['code']==key].item()}")
+        axs[i].set_title(f"SNOTEL Site: {gdf_in_bbox['name'][gdf_in_bbox['code'].str.split('_').str[0]==key].item()}")
         #check dataframe for respective water year
         if f"{WY}_SWE_in" in df.columns:
 

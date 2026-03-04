@@ -13,7 +13,8 @@ like 2026
 def processSNOTEL(site, stateab, WYOI):
     print(site)
 
-    sitedf = pd.read_csv(f"files/SNOTEL/df_{site}_{stateab}_SNTL.csv")
+    #sitedf = pd.read_csv(f"files/SNOTEL/df_{site}_{stateab}_SNTL.csv")
+    sitedf = pd.read_csv(f"files/SNOTEL/df_{site}_{stateab}_SNTL.csv", comment='#')
 
     WYs = sitedf['Water_Year'].unique()
 

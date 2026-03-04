@@ -11,4 +11,4 @@ dependencies:
   - pygeohydro
   - pynhd
   - pynldas2
-  - pyth
+  - python=3.10

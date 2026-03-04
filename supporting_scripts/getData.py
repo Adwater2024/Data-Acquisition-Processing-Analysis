@@ -24,7 +24,7 @@ def getSNOTELData(SiteName, SiteID, StateAbb, StartDate, EndDate, OutputFolder):
     http = urllib3.PoolManager()
     response = http.request('GET', url)
     data = response.data.decode('utf-8')
-    i=0
+    i=0 
     for line in data.split("\n"):
         if line.startswith("#"):
             i=i+1
