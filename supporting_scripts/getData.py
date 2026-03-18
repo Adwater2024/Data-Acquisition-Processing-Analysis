@@ -8,7 +8,6 @@ import pandas as pd
 import pyproj
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import certifi
 from dataretrieval import nwis
 pd.options.mode.chained_assignment = None
 
@@ -236,6 +235,104 @@ def get_usgs_streamflow(site_id, start_date="1980-01-01", end_date=datetime.date
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
+    
+ #Main Data Fetcher
+def get_NLDAS_daily(basin_polygon_coords, begin_date='2025-01-01', end_date=None):
+    #EE only needs to import in the function that is being called, so we can import it here to avoid issues with the other functions that are not being called in this script
+    import ee
+    print("Authenticating with Earth Engine...")
+    ee.Authenticate()
+    print("Initializing Earth Engine...")
+    ee.Initialize()
+    print("Earth Engine initialized successfully.")
+    
+    basin_polygon = ee.Geometry.Polygon(basin_polygon_coords)
+    
+    if end_date is None:
+        end_date = datetime.datetime.today().strftime('%Y-%m-%d')
+    
+    # Load Hourly
+    nldas_hourly = (ee.ImageCollection("NASA/NLDAS/FORA0125_H002")
+                    .filterBounds(basin_polygon)
+                    .filterDate(begin_date, end_date))
+    
+    # Setup Date Math
+    start = ee.Date(begin_date)
+    end = ee.Date(end_date)
+    diff = end.difference(start, 'day')
+    day_list = ee.List.sequence(0, diff.subtract(1))
+    
+    # Map Daily Aggregation
+    daily_func = wrap_make_daily(nldas_hourly, start)
+    daily_collection = ee.ImageCollection.fromImages(day_list.map(daily_func))
+    
+    # Map Spatial Reduction
+    results = daily_collection.map(lambda img: get_all_metrics(img, basin_polygon)).getInfo()
+    
+    df = pd.DataFrame([f['properties'] for f in results['features']]) 
+    
+    # Reorder columns to put date first
+    cols = ['date'] + [c for c in df.columns if c != 'date']
+    df = df[cols]
+    
+    df['date'] = df['date'].str.split('T').str[0]
+    df['date'] = pd.to_datetime(df['date'])
+    df.rename(columns={'date':'Date'}, inplace=True)
+    df.set_index('Date', drop = True, inplace = True)
+    
+    return df
+
+#Temporal Reduction Wrapper (The "Outer" Function)
+def wrap_make_daily(collection, start_date):
+    def make_daily(day_offset):
+        d = start_date.advance(day_offset, 'day')
+        daily_images = collection.filterDate(d, d.advance(1, 'day'))
+        
+        return (daily_images.mean()
+                .set('system:time_start', d.millis())
+                .set('date', d.format('YYYY-MM-dd')))
+    return make_daily
+    
+    
+def get_NLDAS_hourly(basin_polygon_coords, begin_date = '2025-12-30', end_date = '2025-12-31'):
+    import ee
+    print("Authenticating with Earth Engine...")
+    ee.Authenticate()
+    print("Initializing Earth Engine...")
+    ee.Initialize()
+    print("Earth Engine initialized successfully.")
+    basin_polygon = ee.Geometry.Polygon(basin_polygon_coords)
+    #Load and filter the NLDAS-2 Collection
+    nldas_collection = (ee.ImageCollection("NASA/NLDAS/FORA0125_H002")
+    .filterBounds(basin_polygon)
+    .filterDate(begin_date, end_date) # Define your timeframe
+    )
+    
+    results = nldas_collection.map(lambda img: get_all_metrics(img, basin_polygon)).getInfo()
+
+    df = pd.DataFrame([f['properties'] for f in results['features']])
+        
+    # Reorder columns to put date first
+    cols = ['date'] + [c for c in df.columns if c != 'date']
+    df = df[cols]
+    df.rename(columns={'date':'Date'}, inplace=True)
+    df.set_index('Date', drop = True, inplace = True)
+    
+    return df
+    
+# Spatial Reduction Function
+def get_all_metrics(image, basin_polygon):
+    import ee
+    ee.Authenticate()
+    ee.Initialize()
+    stats = image.reduceRegion(
+        reducer=ee.Reducer.mean(),
+        geometry=basin_polygon,
+        scale=12500,
+        maxPixels=1e9
+    )
+    return ee.Feature(None, stats).set('date', image.date().format())
+    
 
 if __name__ == "__main__":
 	SiteName = sys.argv[1]
