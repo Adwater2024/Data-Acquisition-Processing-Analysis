@@ -342,3 +342,45 @@ if __name__ == "__main__":
 	EndDate = sys.argv[5]
 	OutputFolder = sys.argv[6]
 	
+def get_GRIDMET_daily(basin_polygon_coords, begin_date='2024-10-01', end_date='2025-04-01', variable='pr'):
+    """
+    Fetches daily GRIDMET climate data over a basin polygon.
+    
+    Variables: 
+        'pr'   - precipitation (mm)
+        'tmmx' - max temperature (K)
+        'tmmn' - min temperature (K)
+        'srad' - surface downward solar radiation (W/m²)
+        'vs'   - wind speed (m/s)
+    """
+    import ee
+    print("Authenticating with Earth Engine...")
+    ee.Authenticate()
+    ee.Initialize()
+    print("Earth Engine initialized successfully.")
+
+    basin_polygon = ee.Geometry.Polygon(basin_polygon_coords)
+
+    gridmet = (ee.ImageCollection("IDAHO_EPSCOR/GRIDMET")
+               .filterBounds(basin_polygon)
+               .filterDate(begin_date, end_date)
+               .select(variable))
+
+    def get_metrics(image):
+        stats = image.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=basin_polygon,
+            scale=4000,
+            maxPixels=1e9
+        )
+        return ee.Feature(None, stats).set('date', image.date().format('YYYY-MM-dd'))
+
+    results = gridmet.map(get_metrics).getInfo()
+
+    df = pd.DataFrame([f['properties'] for f in results['features']])
+    df['date'] = pd.to_datetime(df['date'])
+    df.rename(columns={'date': 'Date', variable: f'GRIDMET_{variable}'}, inplace=True)
+    df.set_index('Date', drop=True, inplace=True)
+    df.sort_index(inplace=True)
+
+    return df

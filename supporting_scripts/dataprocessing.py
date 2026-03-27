@@ -219,3 +219,29 @@ def SWE_diff(basinname, output_res, medianSWEfile, WYSWEfile, decround, swedifff
         df.to_parquet(f"files/ASO/{basinname}/{output_res}M_SWE_parquet/{swedifffilename}")
 
     return df
+
+def processGRIDMET(df, variable='pr'):
+    """
+    Process GRIDMET data - converts units and adds water year.
+    
+    Parameters:
+    df      : raw GRIDMET DataFrame from getData.get_GRIDMET_daily
+    variable: GRIDMET variable name (default 'pr' for precipitation)
+    
+    Returns:
+    Processed DataFrame
+    """
+    col = f'GRIDMET_{variable}'
+    
+    # Unit conversions
+    if variable == 'pr':
+        df[col] = pd.to_numeric(df[col], errors='coerce')  # already in mm
+    elif variable in ['tmmx', 'tmmn']:
+        df[col] = pd.to_numeric(df[col], errors='coerce') - 273.15  # K to Celsius
+
+    # Add water year
+    df['Water_Year'] = df.index.map(lambda x: x.year + 1 if x.month > 9 else x.year)
+    
+    df.dropna(inplace=True)
+    
+    return df
