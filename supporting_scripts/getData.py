@@ -1,3 +1,4 @@
+from email import header
 import os
 import sys
 import pytz
@@ -33,8 +34,8 @@ def getSNOTELData(SiteName, SiteID, StateAbb, StartDate, EndDate, OutputFolder):
 
     df = pd.DataFrame.from_dict(data) 
     df = df[0].str.split(',', expand=True)
-    df.rename(columns={0:df[0][0], 
-                        1:df[1][0]}, inplace=True)
+    header = {i: df[i].iloc[0] for i in df.columns}
+    df.rename(columns=header, inplace=True)
     df.drop(0, inplace=True)
     df.dropna(inplace=True)
     df.reset_index(inplace=True, drop=True)
@@ -97,8 +98,8 @@ def getCaliSNOTELData(SiteName, SiteID, StartDate, EndDate, OutputFolder):
 
     df = pd.DataFrame.from_dict(data)
     df = df[0].str.split(',', expand=True)
-    df.rename(columns={0:df[0][0], 
-                        1:df[1][0]}, inplace=True)
+    header = {i: df[i].iloc[0] for i in df.columns}
+    df.rename(columns=header, inplace=True)
     df.drop(0, inplace=True)
     df.dropna(inplace=True)
     df.reset_index(inplace=True, drop=True)

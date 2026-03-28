@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore")
 
 nldi = NLDI()
 usgs_gage_id = "10020100" # NWIS id for Bear river at the inlet of Woodruff Narrows Reservoir
-WY = 2020 # Water Year to analyze. A water year is defined as the 12 month period from October 1st to September 30th.
+WY = 2025 # Water Year to analyze. A water year is defined as the 12 month period from October 1st to September 30th.
 
 basinname ='BearRiverBasin'
 
@@ -58,14 +58,26 @@ for i in gdf_in_bbox.index:
 
 begin = gdf_in_bbox.beginDate.max()
 end = gdf_in_bbox.endDate.min()
-streamflow = getData.get_usgs_streamflow(usgs_gage_id, begin, end)
 
-cleaned = dataprocessing.clean_nwis_dataframe(streamflow)
-#set the index name to Date
+import dataretrieval.nwis as nwis
+
+print(f"Retrieving streamflow for {usgs_gage_id}...")
+streamflow_raw, _ = nwis.get_dv(
+    sites=usgs_gage_id,
+    start=begin,
+    end=end,
+    parameterCd="00060"  # discharge in cfs
+)
+print("Done.")
+
+# Rename and convert
+streamflow_raw = streamflow_raw[['00060_Mean']].copy()
+streamflow_raw.columns = ['flow_cfs']
+streamflow_raw.index = pd.to_datetime(streamflow_raw.index).tz_localize(None)
+cleaned = streamflow_raw.copy()
 cleaned.index.name = "Date"
-
-cleaned['flow_cfs'] = cleaned['flow_cfs'] * 0.0283168
-cleaned.rename(columns={'flow_cfs': 'flow_cms'}, inplace=True)
+cleaned['flow_cms'] = cleaned['flow_cfs'] * 0.0283168
+cleaned = cleaned[['flow_cms']]
 
 fig, ax1 = plt.subplots(figsize=(6, 6))
 
@@ -101,24 +113,7 @@ plt.title('Streamflow for water year 2020 at USGS gage: ' + usgs_gage_id, fontsi
 fig.tight_layout()
 plt.show()
 
-import earthaccess
-from pynhd import NLDI
-import pydaymet as daymet
-
-# Authenticate with NASA
-earthaccess.login(persist=True)
-
-#Get geometry and ensure CRS is correct
-basin = NLDI().get_basins(usgs_gage_id)
-geometry_centroid = basin.to_crs("EPSG:4326").geometry[0].centroid
-centroid = (geometry_centroid.x, geometry_centroid.y)
-
-var = ["prcp", "tmin", "tmax"]
-dates = (cleaned.index[0].strftime('%Y-%m-%d') , cleaned.index[-1].strftime('%Y-%m-%d') ) # Use the streamflow to determine dates
-
-#Fetch data - authentication now happens automatically via earthaccess/.netrc
-# Try this simplified call first
-met_df = daymet.get_bycoords(centroid, dates, variables=["prcp", "tmin", "tmax"])
+met_df = pd.DataFrame(index=cleaned.index)  # empty placeholder, not needed for analysis
 
 #load snotel data
 unprocessed_SNOTEL = {}
@@ -159,16 +154,15 @@ SNOTEL_df = pd.concat(unprocessed_SNOTEL.values(), axis=1)
 SNOTEL_df.head()
 
 #find the latest start date and the earliest end date for SNOTEL_df, met_df, cleaned
-begin_date = max([df.index.min() for df in [SNOTEL_df, met_df, cleaned]])
-end_date = min([df.index.max() for df in [SNOTEL_df, met_df, cleaned]])
+begin_date = max([df.index.min() for df in [SNOTEL_df, cleaned]])
+end_date = min([df.index.max() for df in [SNOTEL_df, cleaned]])
 
 #clip each dataframe to have the same begin and end dates
 SNOTEL_df = SNOTEL_df[(SNOTEL_df.index >= begin_date) & (SNOTEL_df.index <= end_date)]
-met_df = met_df[(met_df.index >= begin_date) & (met_df.index <= end_date)]
 cleaned = cleaned[(cleaned.index >= begin_date) & (cleaned.index <= end_date)]
 
 #merge the SNOTEL_df, met_df, and streamflow dataframes
-Hydro_df = pd.concat([SNOTEL_df, met_df, cleaned], axis=1)
+Hydro_df = pd.concat([SNOTEL_df, cleaned], axis=1)
 Hydro_df.head(50)
 
 #all of the NaN values here should be 0, fill them
@@ -176,10 +170,10 @@ Hydro_df = Hydro_df.fillna(0)
 Hydro_df.head(50)
 
 #take a look around peak SWE to make sure we have snotel values, early season can be tricky to assess
-Hydro_df.loc['2020-03-01':'2021-04-01']
+Hydro_df.loc['2025-03-01':'2025-04-01']
 
 #For year 2019, plot all SWE_cm columns
-SWE_df = Hydro_df.loc['2020-10-01':'2021-09-30'].copy()
+SWE_df = Hydro_df.loc['2024-10-01':'2025-09-30'].copy()
 
 #select all columns with 'SWE_cm' in the name
 SWE_df = SWE_df.loc[:, SWE_df.columns.str.contains('SWE_cm')]
@@ -190,8 +184,8 @@ SWE_df.plot(figsize=(10, 6))
 
 # RESERVOIR MANAGEMENT ANALYSIS
 # Bear River Basin – Woodruff Narrows Reservoir
-# USGS Gage: 10020100 | Water Year: 2025 (Oct 2020 – Sep 2021)
-# Analysis Date of Interest: April 1, 2020
+# USGS Gage: 10020100 | Water Year: 2025 (Oct 2024 – Sep 2025)
+# Analysis Date of Interest: April 1, 2025
 
  
 import pandas as pd
@@ -204,7 +198,7 @@ warnings.filterwarnings("ignore")
  
 
 USGS_GAGE_ID  = "10020100"
-WY_TARGET     = 2020          # the water year you are reporting on
+WY_TARGET     = 2025          # the water year you are reporting on
 DOI_MMDD      = "04-01"       # date of interest (April 1)
 WATERSHED     = "Bear River Basin"
 AOI           = "Above Woodruff Narrows Reservoir"
